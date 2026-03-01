@@ -18,7 +18,7 @@ type ImgCreateOptions struct {
 }
 
 // CreateImage executes qemu-img create.
-func CreateImage(ctx context.Context, opts *ImgCreateOptions) error {
+func CreateImage(ctx context.Context, opts *ImgCreateOptions, qemuImgBinary string) error {
 	var args []string
 	args = append(args, "create")
 
@@ -48,7 +48,10 @@ func CreateImage(ctx context.Context, opts *ImgCreateOptions) error {
 		return fmt.Errorf("size is required unless backing file is specified")
 	}
 
-	cmd := exec.CommandContext(ctx, "qemu-img", args...)
+	if qemuImgBinary == "" {
+		qemuImgBinary = "qemu-img"
+	}
+	cmd := exec.CommandContext(ctx, qemuImgBinary, args...)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("qemu-img error: %w\n%s", err, string(out))

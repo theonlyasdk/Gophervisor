@@ -2,7 +2,8 @@
 
 Gophervisor is a graphical frontend for the QEMU emulator/virtualization software, written in Go. It provides an interface to configure and launch virtual machines using `qemu-system-x86_64` and manage virtual hard disk images using `qemu-img`.
 
-> NOTE: Only `qemu-system-x86_64` is supported for now, but support for other architectures may be added in the future. 
+> NOTE: Only `qemu-system-x86_64` is supported for now, but support for other architectures may be added in the future.
+
 > NOTE (#2): Confirmed to work properly only on Linux (Ubuntu 25.10). Not sure if it works on other platforms. If you are facing any issues, please report them in the Issues section.
 
 ## Screenshots
@@ -10,6 +11,16 @@ Gophervisor is a graphical frontend for the QEMU emulator/virtualization softwar
 ![Main Dashboard](docs/screenshots/main-window.png)
 
 ![QEMU Image Creation](docs/screenshots/qemu-img-creation.png)
+
+## Features
+
+- GUI for composing and launching `qemu-system-x86_64` command-line options.
+- Tabs for machine, storage, display, network, kernel, misc, and advanced settings.
+- Disk image creation flow backed by `qemu-img`.
+- Preset selection plus JSON preset load/save support.
+- noVNC launcher with internal WebSocket bridge (no external `websockify` required).
+- noVNC local-network endpoint display with optional QR code view.
+- Shift+click on Start VM shows the effective QEMU invocation for debugging.
 
 ## Installation
 

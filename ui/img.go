@@ -103,7 +103,7 @@ func showCreateDiskDialog(parent fyne.Window, onCreated func(string)) {
 			dialog.ShowError(fmt.Errorf("Size is required unless a backing file is specified"), dWin)
 			return
 		}
-		err := qemu.CreateImage(context.Background(), opts)
+		err := qemu.CreateImage(context.Background(), opts, qemuImgBinaryPath())
 		if err != nil {
 			dialog.ShowError(err, dWin)
 		} else {

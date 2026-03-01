@@ -1,6 +1,9 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
 // Options holds configuration for QEMU parameters.
 type Options struct {
@@ -14,6 +17,10 @@ type Options struct {
 	DriveCDROM   string
 	VGA          string
 	Display      string
+	VNCAddress   string
+	VNCDisplay   string
+	VNCPassword  bool
+	VNCWebPort   string
 	Netdev       string
 	Kernel       string
 	Initrd       string
@@ -30,12 +37,15 @@ type Options struct {
 // NewOptions returns a default configuration.
 func NewOptions() *Options {
 	return &Options{
-		Machine: "q35",
-		Accel:   "kvm",
-		CPU:     "host",
-		Memory:  "2048",
-		Display: "gtk",
-		VGA:     "virtio",
+		Machine:    "q35",
+		Accel:      "kvm",
+		CPU:        "host",
+		Memory:     "2048",
+		Display:    "gtk",
+		VNCAddress: "localhost",
+		VNCDisplay: "1",
+		VNCWebPort: "6080",
+		VGA:        "virtio",
 	}
 }
 
@@ -55,6 +65,20 @@ func (o *Options) Validate() error {
 	}
 	if o.Kernel == "" && o.Append != "" {
 		return errors.New("Append line requires a Kernel image")
+	}
+	netdev := strings.TrimSpace(o.Netdev)
+	if netdev != "" && !strings.EqualFold(netdev, "none") {
+		parts := strings.Split(netdev, ",")
+		hasID := false
+		for _, part := range parts[1:] {
+			if strings.HasPrefix(strings.TrimSpace(part), "id=") {
+				hasID = true
+				break
+			}
+		}
+		if !hasID {
+			return errors.New("Netdev ID is required when a network backend other than 'none' is selected")
+		}
 	}
 	return nil
 }
