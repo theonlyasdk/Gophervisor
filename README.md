@@ -1,6 +1,9 @@
 # Gophervisor
 
-Gophervisor is a graphical frontend for the QEMU machine emulator and virtualization software, written in Go. It provides an interface to configure and launch virtual machines using `qemu-system` and manage virtual hard disk images using `qemu-img`.
+Gophervisor is a graphical frontend for the QEMU emulator/virtualization software, written in Go. It provides an interface to configure and launch virtual machines using `qemu-system-x86_64` and manage virtual hard disk images using `qemu-img`.
+
+> NOTE: Only `qemu-system-x86_64` is supported for now, but support for other architectures may be added in the future. 
+> NOTE (#2): Confirmed to work properly only on Linux (Ubuntu 25.10). Not sure if it works on other platforms. If you are facing any issues, please report them in the Issues section.
 
 ## Screenshots
 

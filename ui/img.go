@@ -114,7 +114,7 @@ func showCreateDiskDialog(parent fyne.Window, onCreated func(string)) {
 		}
 	})
 
-	content := container.NewBorder(nil, container.NewPadded(createBtn), nil, nil, container.NewVScroll(form))
+	content := container.NewPadded(container.NewBorder(nil, container.NewPadded(createBtn), nil, nil, container.NewVScroll(form)))
 	dWin.SetContent(content)
 	dWin.Show()
 }

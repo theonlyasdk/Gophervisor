@@ -179,7 +179,7 @@ func BuildAndRun() {
 		runBtn,
 	)
 
-	content := container.NewBorder(nil, bottomBar, nil, nil, tabs)
+	content := container.NewPadded(container.NewBorder(nil, bottomBar, nil, nil, tabs))
 	w.SetContent(content)
 	w.ShowAndRun()
 }
