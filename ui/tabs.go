@@ -21,11 +21,16 @@ func withTopSpacing(obj fyne.CanvasObject) fyne.CanvasObject {
 
 func newFileEntry(w fyne.Window, entry *widget.Entry) fyne.CanvasObject {
 	btn := widget.NewButton("Choose", func() {
-		dialog.ShowFileOpen(func(uc fyne.URIReadCloser, err error) {
+		dlg := dialog.NewFileOpen(func(uc fyne.URIReadCloser, err error) {
 			if uc != nil && err == nil {
 				entry.SetText(uc.URI().Path())
+				if closeErr := uc.Close(); closeErr != nil {
+					dialog.ShowError(closeErr, w)
+				}
 			}
 		}, w)
+		dlg.Resize(fyne.NewSize(920, 640))
+		dlg.Show()
 	})
 	return container.NewBorder(nil, nil, nil, btn, entry)
 }
@@ -72,11 +77,16 @@ func buildStandardTab(w fyne.Window, opts *config.Options) *container.TabItem {
 
 func newHDAFileEntry(w fyne.Window, entry *widget.Entry) fyne.CanvasObject {
 	chooseBtn := widget.NewButton("Choose", func() {
-		dialog.ShowFileOpen(func(uc fyne.URIReadCloser, err error) {
+		dlg := dialog.NewFileOpen(func(uc fyne.URIReadCloser, err error) {
 			if uc != nil && err == nil {
 				entry.SetText(uc.URI().Path())
+				if closeErr := uc.Close(); closeErr != nil {
+					dialog.ShowError(closeErr, w)
+				}
 			}
 		}, w)
+		dlg.Resize(fyne.NewSize(920, 640))
+		dlg.Show()
 	})
 
 	createBtn := widget.NewButton("Create", func() {

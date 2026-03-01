@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
@@ -91,6 +93,30 @@ func showQemuCommandDialog(parent fyne.Window, opts *config.Options) {
 	)
 	d := dialog.NewCustom("QEMU Invocation", "Close", container.NewPadded(content), parent)
 	d.Resize(fyne.NewSize(820, 420))
+	d.Show()
+}
+
+func showQemuRunErrorDialog(parent fyne.Window, err error, details string) {
+	summary := strings.TrimSpace(err.Error())
+	details = strings.TrimSpace(details)
+	if details == "" {
+		details = summary
+	}
+
+	box := widget.NewMultiLineEntry()
+	box.SetText(details)
+	box.SetMinRowsVisible(10)
+	box.Wrapping = fyne.TextWrapOff
+	box.TextStyle = fyne.TextStyle{Monospace: true}
+
+	content := container.NewVBox(
+		widget.NewLabel(summary),
+		widget.NewSeparator(),
+		widget.NewLabel("Details:"),
+		box,
+	)
+	d := dialog.NewCustom("QEMU Execution Error", "Close", container.NewPadded(content), parent)
+	d.Resize(fyne.NewSize(840, 420))
 	d.Show()
 }
 
@@ -182,7 +208,7 @@ func BuildAndRun() {
 	menu := fyne.NewMainMenu(
 		fyne.NewMenu("File",
 			fyne.NewMenuItem("Load Preset...", func() {
-				dialog.ShowFileOpen(func(r fyne.URIReadCloser, err error) {
+				dlg := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 					if r == nil || err != nil {
 						return
 					}
@@ -193,6 +219,8 @@ func BuildAndRun() {
 						refreshUI()
 					}
 				}, w)
+				dlg.Resize(fyne.NewSize(920, 640))
+				dlg.Show()
 			}),
 			fyne.NewMenuItem("Save Preset...", func() {
 				dlg := dialog.NewFileSave(func(wr fyne.URIWriteCloser, err error) {
@@ -202,8 +230,14 @@ func BuildAndRun() {
 
 					path := wr.URI().Path()
 					if filepath.Ext(path) == "" {
-						wr.Close()
-						os.Remove(path)
+						if closeErr := wr.Close(); closeErr != nil {
+							dialog.ShowError(closeErr, w)
+							return
+						}
+						if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+							dialog.ShowError(rmErr, w)
+							return
+						}
 						path += ".json"
 
 						f, err := os.Create(path)
@@ -228,6 +262,7 @@ func BuildAndRun() {
 					}
 				}, w)
 				dlg.SetFilter(storage.NewExtensionFileFilter([]string{".json"}))
+				dlg.Resize(fyne.NewSize(920, 640))
 				dlg.Show()
 			}),
 			fyne.NewMenuItem("Preferences...", func() {
@@ -277,7 +312,19 @@ func BuildAndRun() {
 	})
 	presetSelect.PlaceHolder = "Select Preset..."
 
+	var vmMu sync.Mutex
+	var activeVMCmd *exec.Cmd
+	var updateVMButton func()
+
 	runBtn := widget.NewButton("Start VM", func() {
+		vmMu.Lock()
+		currentCmd := activeVMCmd
+		vmMu.Unlock()
+		if currentCmd != nil && currentCmd.Process != nil {
+			_ = currentCmd.Process.Kill()
+			return
+		}
+
 		if dd, ok := fyne.CurrentApp().Driver().(desktop.Driver); ok {
 			if dd.CurrentKeyModifiers()&fyne.KeyModifierShift != 0 {
 				showQemuCommandDialog(w, opts)
@@ -288,15 +335,68 @@ func BuildAndRun() {
 			dialog.ShowError(err, w)
 			return
 		}
-		errCh := qemu.Run(context.Background(), opts, qemuSystemBinaryPath())
-		go func() {
-			if err := <-errCh; err != nil {
-				dialog.ShowError(err, w)
+
+		detached := false
+		if dd, ok := fyne.CurrentApp().Driver().(desktop.Driver); ok {
+			detached = dd.CurrentKeyModifiers()&fyne.KeyModifierControl != 0
+		}
+
+		var (
+			cmd     *exec.Cmd
+			err     error
+			qemuOut *qemu.CaptureBuffer
+		)
+		if detached {
+			cmd, err = qemu.StartDetached(opts, qemuSystemBinaryPath())
+		} else {
+			cmd, qemuOut, err = qemu.StartWithOutput(context.Background(), opts, qemuSystemBinaryPath())
+		}
+		if err != nil {
+			showQemuRunErrorDialog(w, err, "")
+			return
+		}
+
+		vmMu.Lock()
+		activeVMCmd = cmd
+		vmMu.Unlock()
+		updateVMButton()
+
+		go func(startedDetached bool, startedCmd *exec.Cmd) {
+			waitErr := startedCmd.Wait()
+			vmMu.Lock()
+			if activeVMCmd == startedCmd {
+				activeVMCmd = nil
 			}
-		}()
+			vmMu.Unlock()
+			fyne.Do(func() {
+				updateVMButton()
+				if waitErr != nil && !strings.Contains(strings.ToLower(waitErr.Error()), "killed") {
+					details := ""
+					if qemuOut != nil {
+						details = qemuOut.String()
+					}
+					showQemuRunErrorDialog(w, fmt.Errorf("QEMU exited: %w", waitErr), details)
+				}
+				if startedDetached {
+					dialog.ShowInformation("Detached VM Started", "QEMU started in detached mode and can continue running after Gophervisor closes.", w)
+				}
+			})
+		}(detached, cmd)
 	})
+	updateVMButton = func() {
+		vmMu.Lock()
+		running := activeVMCmd != nil
+		vmMu.Unlock()
+		if running {
+			runBtn.SetText("Stop VM")
+			return
+		}
+		runBtn.SetText("Start VM")
+	}
+	updateVMButton()
+
 	runHintBtn := widget.NewButtonWithIcon("", theme.InfoIcon(), func() {
-		dialog.ShowInformation("Start VM", "Click on Start VM button to start the VM.\nShift+Click on Start VM button to preview the exact QEMU command line for debugging.", w)
+		dialog.ShowInformation("Start VM", "Click on Start VM button to start the VM.\nClick on Stop VM button to terminate a running VM immediately.\nShift+Click on Start VM button to preview the exact QEMU command line for debugging.\nCtrl+Click on Start VM button to start QEMU detached so it can continue after Gophervisor closes.", w)
 	})
 	runHintBtn.Importance = widget.LowImportance
 	noVNCBtn := widget.NewButton("Open in noVNC", func() {
@@ -318,14 +418,13 @@ func BuildAndRun() {
 			} else {
 				noVNCBtn.SetText("Open in noVNC")
 			}
-			runHintBtn.Show()
 			noVNCBtn.Show()
 			return
 		}
-		runHintBtn.Hide()
 		noVNCBtn.Hide()
 	}
 	updateNoVNCButton(isVNCDisplaySelected(opts))
+	runHintBtn.Show()
 
 	bottomBar := container.NewHBox(
 		presetSelect,

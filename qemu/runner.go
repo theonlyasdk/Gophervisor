@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"sync"
@@ -134,6 +135,27 @@ func StartWithOutput(ctx context.Context, opts *config.Options, qemuBinary strin
 		return nil, nil, fmt.Errorf("QEMU execution error: %w", err)
 	}
 	return cmd, out, nil
+}
+
+// StartDetached launches QEMU without attaching stdio so it can keep running independently.
+func StartDetached(opts *config.Options, qemuBinary string) (*exec.Cmd, error) {
+	if qemuBinary == "" {
+		qemuBinary = "qemu-system-x86_64"
+	}
+	cmd := exec.Command(qemuBinary, buildArgs(opts)...)
+	devNull, err := os.OpenFile(os.DevNull, os.O_RDWR, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open %s: %w", os.DevNull, err)
+	}
+	cmd.Stdin = devNull
+	cmd.Stdout = devNull
+	cmd.Stderr = devNull
+	if err := cmd.Start(); err != nil {
+		_ = devNull.Close()
+		return nil, fmt.Errorf("QEMU execution error: %w", err)
+	}
+	_ = devNull.Close()
+	return cmd, nil
 }
 
 // Run launches the QEMU emulator with the provided options.

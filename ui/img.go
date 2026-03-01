@@ -2,6 +2,7 @@ package ui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -37,8 +38,14 @@ func showCreateDiskDialog(parent fyne.Window, onCreated func(string)) {
 		dlg := dialog.NewFileSave(func(uc fyne.URIWriteCloser, err error) {
 			if uc != nil && err == nil {
 				path := uc.URI().Path()
-				uc.Close()
-				os.Remove(path) // Remove the 0-byte file immediately written by Fyne
+				if closeErr := uc.Close(); closeErr != nil {
+					dialog.ShowError(closeErr, dWin)
+					return
+				}
+				if rmErr := os.Remove(path); rmErr != nil && !errors.Is(rmErr, os.ErrNotExist) {
+					dialog.ShowError(rmErr, dWin)
+					return
+				}
 
 				if filepath.Ext(path) == "" {
 					path += "." + opts.Format
@@ -48,6 +55,7 @@ func showCreateDiskDialog(parent fyne.Window, onCreated func(string)) {
 				opts.File = path
 			}
 		}, dWin)
+		dlg.Resize(fyne.NewSize(920, 640))
 		dlg.Show()
 	})
 	fileBox := container.NewBorder(nil, nil, nil, fileBtn, fileEntry)
@@ -65,12 +73,17 @@ func showCreateDiskDialog(parent fyne.Window, onCreated func(string)) {
 	}
 
 	backingBtn := widget.NewButton("Choose", func() {
-		dialog.ShowFileOpen(func(uc fyne.URIReadCloser, err error) {
+		dlg := dialog.NewFileOpen(func(uc fyne.URIReadCloser, err error) {
 			if uc != nil && err == nil {
 				backingEntry.SetText(uc.URI().Path())
 				opts.BackingFile = uc.URI().Path()
+				if closeErr := uc.Close(); closeErr != nil {
+					dialog.ShowError(closeErr, dWin)
+				}
 			}
 		}, dWin)
+		dlg.Resize(fyne.NewSize(920, 640))
+		dlg.Show()
 	})
 	backingBox := container.NewBorder(nil, nil, nil, backingBtn, backingEntry)
 
